@@ -1,0 +1,9 @@
+faster-whisper==1.2.1
+sounddevice==0.5.6
+numpy==2.5.3
+claude-agent-sdk==0.2.173
+# Windows Smart App Control blocked a newer av build, so these stay on versions known to load.
+av==19.0.1
+ctranslate2==4.8.2
+onnxruntime==1.30.0
+tokenizers==0.23.2
