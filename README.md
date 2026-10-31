@@ -19,4 +19,4 @@ MIT. See `LICENSE`.
 
 ## Ideas?
 
-Drop a and a human person will get back to you, but not after the machine has to nudge them🤓. Think this could be improved? Here for it, please reach out or take out a pull request , Happy hacking folks. 🤖
+Drop an email and a human person will get back to you, but not after the machine has to nudge them🤓. Think this could be improved? Here for it, please reach out or take out a pull request , Happy hacking folks. 🤖
