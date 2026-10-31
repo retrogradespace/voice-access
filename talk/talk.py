@@ -17,8 +17,11 @@ Settings come from environment variables, all optional:
     TALK_NAME      how the log labels the speaker (default: You)
     TALK_VOICE     Windows voice name (default: Microsoft Zira Desktop)
     TALK_RATE      speaking speed from -10 (slowest) to 10 (fastest) (default: 0)
-    TALK_TOOLS     tools that run without asking (default: see ALLOWED_TOOLS)
+    TALK_TOOLS     tools that run without asking, overriding the spoken permissions (default: unset)
     TALK_NO_LOG    set to 1 to keep no log at all
+
+Nothing extra is pre-approved at first. The person widens or narrows that by
+voice ("permissions", "allow web", "ask before web"); see PERMISSIONS.
 """
 import os
 os.environ.setdefault("CT2_USE_MKL", "0")  # some MKL builds fail to allocate memory on CPU
@@ -59,8 +62,19 @@ try:
     SPEECH_RATE = max(-10, min(10, int(os.environ.get("TALK_RATE") or 0)))
 except ValueError:
     SPEECH_RATE = 0
-# These run without asking. Anything else is asked aloud.
-ALLOWED_TOOLS = os.environ.get("TALK_TOOLS") or "Read,Glob,Grep,Edit(./**),Write(./**),WebSearch,WebFetch"
+# Set, even to nothing, this replaces the spoken permissions below.
+TOOLS_OVERRIDE = os.environ.get("TALK_TOOLS")
+# What the person can choose to stop being asked about: tools, what it allows, and the risk they hear first.
+PERMISSIONS = {
+    "editing": ("Edit(./**),Write(./**)", "create and change files in this folder",
+                "It could overwrite your work."),
+    "reading": ("Read,Glob,Grep", "read and search files anywhere on this computer",
+                "Anything it reads is sent to Claude."),
+    "web": ("WebSearch,WebFetch", "search the web and open web pages",
+            "A harmful page could try to trick it."),
+}
+# Under .claude because Claude Code asks before editing there, whatever the allow rules say.
+PERMISSIONS_FILE = Path.home() / ".claude" / "talk-permissions.json"
 CLAUDE_TIMEOUT = 600        # includes time spent waiting for spoken approvals
 
 STOP_PHRASES = {"goodbye", "good bye", "stop listening", "end conversation"}
@@ -264,6 +278,10 @@ def describe(tool, args):
         return f"change the file {file_name(args.get('file_path') or args.get('notebook_path', ''))}"
     if tool == "Read":
         return f"read the file {file_name(args.get('file_path', ''))}"
+    if tool in ("Grep", "Glob"):
+        return f"search the folder {Path(str(args.get('path', ''))).name or 'it is working in'}"
+    if tool == "WebSearch":
+        return f"search the web for: {clip(args.get('query', ''))}"
     if tool == "WebFetch":
         return f"open a web page on {urlparse(args.get('url', '')).netloc or 'the web'}"
     if tool.startswith("mcp__"):
@@ -272,6 +290,92 @@ def describe(tool, args):
         service = parts[1].replace("_", " ").replace("-", " ") if len(parts) > 2 else "a connected service"
         return f"use {action}, from {service}"
     return f"use the {tool} tool"
+
+
+# --------------------------------------------------------------- permissions
+
+def chosen_permissions():
+    """The names the person has allowed. Nothing, if the file is missing or unreadable."""
+    try:
+        names = json.loads(PERMISSIONS_FILE.read_text(encoding="utf-8")).get("allowed", [])
+    except FileNotFoundError:
+        return []
+    except Exception as e:
+        say(f"[could not read {PERMISSIONS_FILE}, so nothing extra is allowed: {e}]")
+        return []
+    return [n for n in PERMISSIONS if n in names]
+
+
+def allowed_tools():
+    tools = TOOLS_OVERRIDE if TOOLS_OVERRIDE is not None else ",".join(PERMISSIONS[n][0] for n in chosen_permissions())
+    return [t.strip() for t in tools.split(",") if t.strip()]
+
+
+def save_permissions(names):
+    """True if saved. Written by the program only: Claude's own requests for this file are refused."""
+    try:
+        PERMISSIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        PERMISSIONS_FILE.write_text(json.dumps({"allowed": names}) + "\n", encoding="utf-8")
+    except Exception as e:
+        say(f"[could not save permissions: {e}]")
+        return False
+    append_log(f"\n**{datetime.datetime.now():%H:%M} Permissions set:** {names or 'nothing extra'}\n")
+    return True
+
+
+def permissions_summary():
+    chosen = chosen_permissions()
+    if chosen:
+        allowed = ". ".join(f"It can {PERMISSIONS[n][1]}" for n in chosen)
+        start = f"Without asking, Claude can read and search this folder. {allowed}."
+    else:
+        start = "Without asking, Claude can only read and search this folder."
+    choices = " ".join(f"Say allow {n}, to let it {PERMISSIONS[n][1]}." for n in PERMISSIONS if n not in chosen)
+    undo = " ".join(f"Say ask before {n}, to be asked again." for n in chosen)
+    return " ".join(p for p in (start, choices, undo) if p)
+
+
+def permission_command(key):
+    """What a spoken phrase asks for: ("show",), ("allow", name), ("ask", name), or None."""
+    if key in ("permissions", "check permissions", "what can you do without asking"):
+        return ("show",)
+    for name in PERMISSIONS:
+        if key == f"allow {name}":
+            return ("allow", name)
+        if key == f"ask before {name}":
+            return ("ask", name)
+    return None
+
+
+def change_permissions(command, model):
+    """Handled here, not by Claude, so a web page or file can't talk Claude into widening them."""
+    if command[0] == "show" and TOOLS_OVERRIDE is None:
+        speak(permissions_summary())
+        return
+    if TOOLS_OVERRIDE is not None:
+        speak("The talk tools setting is controlling permissions in this window, so I cannot change them by voice.")
+        return
+    action, name = command
+    chosen = chosen_permissions()
+    if action == "ask":
+        if name in chosen and not save_permissions([n for n in chosen if n != name]):
+            speak("I could not save that, so nothing changed.")
+            return
+        speak(f"Done. Claude will ask before it can {PERMISSIONS[name][1]}.")
+        return
+    if name in chosen:
+        speak(f"Claude can already {PERMISSIONS[name][1]} without asking.")
+        return
+    speak(f"This lets Claude {PERMISSIONS[name][1]} without asking. {PERMISSIONS[name][2]} Say yes to allow it, or no to leave it as it is.")
+    heard = listen(model, wait=APPROVAL_WAIT)
+    say(f"[permission answer: {heard!r}]")
+    if yes_or_no(heard) is not True:
+        speak("Nothing changed.")
+        return
+    if save_permissions([n for n in PERMISSIONS if n in chosen or n == name]):
+        speak(f"Done. Claude can {PERMISSIONS[name][1]} without asking. Say ask before {name} to undo it.")
+    else:
+        speak("I could not save that, so nothing changed.")
 
 
 # --------------------------------------------------------------------- brain
@@ -322,7 +426,7 @@ class Brain:
     async def _ask(self, text):
         from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, ResultMessage
         options = ClaudeAgentOptions(
-            allowed_tools=[t.strip() for t in ALLOWED_TOOLS.split(",") if t.strip()],
+            allowed_tools=allowed_tools(),
             system_prompt={"type": "preset", "preset": "claude_code",
                            "append": STYLE_FILE.read_text(encoding="utf-8")},
             permission_mode="default",      # anything not pre-approved comes to _approve
@@ -360,6 +464,11 @@ class Brain:
                     updated_input={"questions": input_data.get("questions", []), "answers": answers})
             exact = f"{tool_name} {json.dumps(input_data, ensure_ascii=False)}"
             say(f"[exact request: {exact}]")
+            if PERMISSIONS_FILE.name in exact:
+                log_approval(exact, False)
+                return PermissionResultDeny(
+                    message="Only the person can change these permissions, using the spoken commands. "
+                            "Do not retry. Tell them to say the word permissions to hear the options.")
             # A command's description is written by Claude, so the real command is read out too.
             command = spoken_command(input_data.get("command", "")) if tool_name in ("Bash", "PowerShell") else ""
             allowed = await asyncio.to_thread(self._spoken_yes_no, describe(tool_name, input_data), command)
@@ -473,7 +582,7 @@ def main():
     brain = None if args.mirror else Brain(model)
     last_reply = ""
     speak("Mirror ready. I will repeat what I hear. Say goodbye to stop." if args.mirror
-          else "Ready. Speak after the beep. Say goodbye to stop.")
+          else "Ready. Speak after the beep. Say permissions to hear what Claude can do without asking. Say goodbye to stop.")
 
     empty_runs = 0
     while True:
@@ -506,8 +615,12 @@ def main():
                 brain.session = None
                 speak("New conversation.")
                 continue
+            command = permission_command(key) if brain else None
+            if command:
+                change_permissions(command, model)
+                continue
 
-            log_heard(heard)        # first, so approvals during the turn land after it in the log
+            log_heard(heard)      # first, so approvals during the turn land after it in the log
             reply = f"I heard: {heard}" if args.mirror else brain.ask(heard)
             last_reply = reply
             say(f"Claude: {reply}\n")

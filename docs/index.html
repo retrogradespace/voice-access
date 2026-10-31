@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>voice-access: use a Windows computer by voice, with Claude</title>
+<meta name="description" content="An open-source project for people who want to talk to their Windows computer with Claude and hear it answer. Spoken approvals, local transcription and a plain account of what it can access.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230b0714'/%3E%3Cpath d='M7 8l9 17 9-17' fill='none' stroke='%23B26BFF' stroke-width='4'/%3E%3C/svg%3E">
+<script>
+try {
+  var savedView = window.localStorage.getItem('voice-access-view');
+  if (savedView === 'light' || savedView === 'dark') document.documentElement.setAttribute('data-theme', savedView);
+} catch (e) {}
+</script>
+<style>
+@font-face{font-family:"Atkinson Hyperlegible Next";font-weight:400;font-display:swap;src:url("fonts/atkinson-hyperlegible-next-latin-400-normal.woff2") format("woff2")}
+@font-face{font-family:"Atkinson Hyperlegible Next";font-weight:700;font-display:swap;src:url("fonts/atkinson-hyperlegible-next-latin-700-normal.woff2") format("woff2")}
+@font-face{font-family:"Atkinson Hyperlegible Next";font-weight:800;font-display:swap;src:url("fonts/atkinson-hyperlegible-next-latin-800-normal.woff2") format("woff2")}
+@font-face{font-family:"Atkinson Hyperlegible Mono";font-weight:400;font-display:swap;src:url("fonts/atkinson-hyperlegible-mono-latin-400-normal.woff2") format("woff2")}
+@font-face{font-family:"Atkinson Hyperlegible Mono";font-weight:700;font-display:swap;src:url("fonts/atkinson-hyperlegible-mono-latin-700-normal.woff2") format("woff2")}
+@font-face{font-family:"Chakra Petch";font-weight:600;font-display:swap;src:url("fonts/chakra-petch-latin-600-normal.woff2") format("woff2")}
+@font-face{font-family:"Chakra Petch";font-weight:700;font-display:swap;src:url("fonts/chakra-petch-latin-700-normal.woff2") format("woff2")}
+
+:root{
+  color-scheme:light;
+  --bg:#f7f5ff;--panel:#ede8fb;--line:#7a52cc;--cool:#0a5a78;--strong:#160c2b;--ink:#241a3d;--accent:#5b21b6;--on-accent:#ffffff;
+  --glow-header:none;--glow-button:none;--glow-band:none;--glow-panel:none;--glow-cool:none;--glow-title:none;--glow-quote:none;
+  --display:"Chakra Petch","Segoe UI",sans-serif;
+  --gutter:clamp(1rem,4vw,3rem);
+  --section:clamp(3rem,7vw,5.5rem);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0b0714;--panel:#150d26;--line:#7a52cc;--cool:#5ce9ff;--strong:#ffffff;--ink:#f1edff;--accent:#B26BFF;--on-accent:#0b0714;
+    --glow-header:0 6px 32px rgba(178,107,255,0.45);--glow-button:0 0 20px rgba(178,107,255,0.8);--glow-band:0 0 40px rgba(178,107,255,0.4);--glow-panel:0 0 32px rgba(178,107,255,0.45);--glow-cool:0 0 22px rgba(92,233,255,0.45);--glow-title:0 0 28px rgba(178,107,255,1),0 0 6px rgba(178,107,255,1);--glow-quote:0 0 18px rgba(178,107,255,1);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0b0714;--panel:#150d26;--line:#7a52cc;--cool:#5ce9ff;--strong:#ffffff;--ink:#f1edff;--accent:#B26BFF;--on-accent:#0b0714;
+  --glow-header:0 6px 32px rgba(178,107,255,0.45);--glow-button:0 0 20px rgba(178,107,255,0.8);--glow-band:0 0 40px rgba(178,107,255,0.4);--glow-panel:0 0 32px rgba(178,107,255,0.45);--glow-cool:0 0 22px rgba(92,233,255,0.45);--glow-title:0 0 28px rgba(178,107,255,1),0 0 6px rgba(178,107,255,1);--glow-quote:0 0 18px rgba(178,107,255,1);
+}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Atkinson Hyperlegible Next","Segoe UI",Verdana,sans-serif;font-size:1.25rem;line-height:1.55;overflow-wrap:anywhere}
+main:focus{outline:none}
+h1,h2,h3,h4,p,ul,ol,figure,blockquote{margin:0}
+p,.measure{max-width:38em}
+a{color:var(--cool);text-decoration-thickness:2px;text-underline-offset:0.18em}
+a:hover{color:var(--strong);text-decoration-thickness:4px}
+a:focus-visible,button:focus-visible{outline:4px solid var(--strong);outline-offset:4px}
+button:hover{text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:0.18em}
+code{font-family:"Atkinson Hyperlegible Mono",Consolas,monospace;font-size:0.95em;color:var(--cool)}
+li::marker{color:var(--cool);font-weight:700}
+.skip{position:absolute;left:1rem;top:-6rem;z-index:10;padding:0.75rem 1.25rem;background:var(--bg);color:var(--strong);border:3px solid var(--cool);font-weight:700}
+.skip:focus{top:1rem}
+.reading{outline:3px solid var(--cool);outline-offset:6px}
+
+.wrap{max-width:72rem;margin:0 auto}
+.stack{display:flex;flex-direction:column;gap:1rem}
+.columns{display:flex;flex-wrap:wrap;gap:clamp(2rem,5vw,4rem)}
+.column{flex:1 1 22rem;min-width:0}
+.plain-list{padding-left:1.4em;display:flex;flex-direction:column;gap:0.625rem}
+.tile-list{padding:0;list-style:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(14rem,1fr));gap:1rem}
+.link-row{padding:0;list-style:none;display:flex;flex-wrap:wrap;column-gap:2rem;row-gap:0.25rem}
+.link-row a{display:inline-flex;align-items:center;min-height:2.75rem}
+
+.control{min-height:2.75rem;padding:0.375rem 1.125rem;font:inherit;font-weight:700;color:var(--strong);background:var(--panel);border:2px solid var(--cool);cursor:pointer}
+.cta{display:inline-flex;align-items:center;min-height:3.25rem;padding:0.625rem 1.5rem}
+.cta-primary,.cta-primary:hover{background:var(--accent);color:var(--on-accent);border:3px solid var(--accent);box-shadow:var(--glow-button);font-weight:800}
+.cta-secondary{background:var(--bg);color:var(--cool);border:3px solid var(--cool);font-weight:700}
+
+header{border-bottom:3px solid var(--accent);box-shadow:var(--glow-header);padding:1rem var(--gutter) clamp(3rem,8vw,7rem)}
+.tools{margin-bottom:clamp(2rem,5vw,4rem);display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:0.75rem}
+.tools-group{display:flex;flex-wrap:wrap;gap:0.75rem}
+#read-error:empty{display:none}
+#read-error{flex-basis:100%;text-align:right}
+.hero{display:flex;flex-direction:column;gap:1.75rem;align-items:flex-start}
+h1{font-family:var(--display);font-size:clamp(2.5rem,10.5vw,7rem);line-height:1;font-weight:700;color:var(--strong);text-shadow:var(--glow-title)}
+.tagline{max-width:24em;font-family:var(--display);font-size:clamp(1.5rem,3.4vw,2.5rem);line-height:1.25;font-weight:600;color:var(--cool)}
+.hero-links{display:flex;flex-wrap:wrap;gap:1rem;padding-top:0.5rem}
+
+nav{background:var(--panel);border-bottom:2px solid var(--line);padding:0.75rem var(--gutter)}
+.band{padding:var(--section) var(--gutter)}
+section+section{border-top:2px solid var(--line)}
+h2{font-family:var(--display);font-size:clamp(2.25rem,5vw,3.75rem);line-height:1.1;font-weight:700;color:var(--accent)}
+h3{font-size:clamp(1.5rem,2.6vw,1.875rem);line-height:1.2;font-weight:800;color:var(--strong)}
+h3.large{font-size:clamp(1.625rem,3vw,2.25rem)}
+h4{font-size:1.375rem;font-weight:700;color:var(--strong);margin-bottom:0.5rem}
+.section-stack{display:flex;flex-direction:column;gap:clamp(1.5rem,4vw,2.5rem)}
+.what-stack{display:flex;flex-direction:column;gap:clamp(2.5rem,5vw,4rem)}
+.access-stack{display:flex;flex-direction:column;gap:clamp(2rem,5vw,3rem)}
+.steps{padding:0;list-style-position:inside;display:grid;grid-template-columns:repeat(auto-fit,minmax(14rem,1fr));gap:1rem}
+.steps li,.tile-list li{padding:1.25rem;background:var(--panel);border:2px solid var(--line)}
+.steps li p{margin-top:0.5rem}
+.steps li.highlight{border:3px solid var(--cool);box-shadow:var(--glow-cool)}
+.need-item{color:var(--strong);font-size:1.625rem;font-weight:800}
+.say-and-beeps{display:flex;flex-wrap:wrap;gap:2.5rem}
+.say-and-beeps>div{flex:1 1 20rem;min-width:0}
+.say-and-beeps ul{padding-left:1.4em}
+
+.idea{background:var(--panel);border-top:3px solid var(--accent);border-bottom:3px solid var(--accent);box-shadow:var(--glow-band)}
+.idea .wrap{display:flex;flex-direction:column;gap:1.5rem}
+.idea h3{font-size:1.375rem;font-weight:700;color:var(--cool)}
+blockquote{max-width:22em;font-family:var(--display);font-size:clamp(1.875rem,5vw,3.5rem);line-height:1.15;font-weight:700;color:var(--strong);text-shadow:var(--glow-quote)}
+
+.approvals{padding:clamp(1.25rem,4vw,3rem);background:var(--panel);border:3px solid var(--accent);box-shadow:var(--glow-panel);display:flex;flex-wrap:wrap;gap:clamp(2rem,5vw,4rem)}
+.approvals>div{flex:1 1 22rem;min-width:0;display:flex;flex-direction:column;gap:1.25rem}
+#approvals{font-family:var(--display);font-size:clamp(1.875rem,4vw,3rem);line-height:1.1;font-weight:700}
+.rules{padding:0;list-style:none;display:flex;flex-direction:column;gap:0.75rem}
+.rules li{padding:0.75rem 1rem;background:var(--bg);border:2px solid var(--line)}
+.rules li.yes{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.approvals figure{flex:1 1 26rem;min-width:0;display:flex;flex-direction:column;gap:0.75rem}
+figcaption{font-weight:700}
+.exchange{padding:0;list-style:none;display:flex;flex-direction:column;gap:0.75rem}
+.exchange li{padding:0.875rem 1rem;background:var(--bg);border:2px solid var(--line);margin-right:2rem}
+.exchange li.you{border-color:var(--cool);margin-right:0;margin-left:2rem}
+.exchange li.you strong{color:var(--cool)}
+
+.helper{max-width:44rem;padding:clamp(1.25rem,3vw,2rem);background:var(--panel);border:3px solid var(--cool);box-shadow:var(--glow-cool);display:flex;flex-direction:column;gap:0.75rem}
+.access-part{max-width:38em;display:flex;flex-direction:column;gap:0.625rem}
+.access-part ul{padding-left:1.4em;display:flex;flex-direction:column;gap:0.375rem}
+
+footer{background:var(--panel);border-top:3px solid var(--accent);padding:clamp(2.5rem,5vw,4rem) var(--gutter)}
+footer .wrap{display:flex;flex-direction:column;gap:1rem;align-items:flex-start}
+</style>
+</head>
+<body>
+
+<a class="skip" href="#main">Skip to the main content</a>
+
+<header>
+<div class="wrap tools">
+<div class="tools-group" id="read-tools" hidden>
+<button id="read-main" class="control" type="button">Read aloud</button>
+<button id="read-next" class="control" type="button" hidden>Next part</button>
+<button id="read-stop" class="control" type="button" hidden>Stop reading</button>
+</div>
+<button id="view-toggle" class="control" type="button" hidden>Switch to light view</button>
+<div id="read-error" role="alert"></div>
+</div>
+<div class="wrap hero">
+<h1>voice-access</h1>
+<p class="tagline">Use a Windows computer by voice, with Claude.</p>
+<p>An open-source project for people who want to talk to their computer and hear it answer. During setup, it checks with you, out loud, that you really heard it.</p>
+<div class="hero-links">
+<a class="cta cta-primary" href="https://github.com/retrogradespace/voice-access">Get the code and setup instructions on GitHub</a>
+<a class="cta cta-secondary" href="#for-me">Is it for me?</a>
+</div>
+</div>
+</header>
+
+<nav aria-label="On this page">
+<ul class="wrap link-row">
+<li><a href="#what">What is this?</a></li>
+<li><a href="#for-me">Is it for me?</a></li>
+<li><a href="#need">What do I need?</a></li>
+<li><a href="#start">How do I get started?</a></li>
+<li><a href="#access">What can it access?</a></li>
+</ul>
+</nav>
+
+<main id="main" tabindex="-1">
+
+<section id="what" aria-labelledby="what-h">
+
+<div class="band">
+<div class="wrap what-stack">
+<div class="stack">
+<h2 id="what-h">What is this?</h2>
+<p>voice-access has two parts. One is for talking with Claude. The other gets your computer's sound working for you first.</p>
+</div>
+
+<div class="stack" style="gap:1.5rem">
+<h3 class="large"><code>talk</code>: a spoken conversation with Claude</h3>
+<ol class="steps">
+<li><strong>You speak.</strong><p>Your voice stays on your computer.</p></li>
+<li><strong>Your words are written out.</strong><p>This happens on your own computer.</p></li>
+<li class="highlight"><strong>Claude Code answers.</strong><p>Claude receives the text, not the audio.</p></li>
+<li><strong>The answer is read aloud.</strong><p>Then it is your turn again.</p></li>
+</ol>
+<div class="say-and-beeps">
+<div>
+<h4>Say things like</h4>
+<ul>
+<li>"Repeat that"</li>
+<li>"New conversation"</li>
+<li>"Permissions"</li>
+<li>"Goodbye"</li>
+</ul>
+</div>
+<div>
+<h4>Beeps tell you when it is</h4>
+<ul>
+<li>Listening</li>
+<li>Working</li>
+<li>Stuck on a problem</li>
+</ul>
+</div>
+</div>
+</div>
+
+<div class="stack">
+<h3 class="large"><code>accessible-voice-setup</code>: sound that really works for you</h3>
+<p>A Claude skill, which is a set of instructions Claude can follow. It finds out what your computer's sound input and output can really do. It confirms each one with you using a repeat-back test, then builds one-word voice commands around what works.</p>
+<p>If your computer is missing something, it can help you compare and price a microphone, speaker, headphones or memory.</p>
+</div>
+</div>
+</div>
+
+<div class="band idea">
+<div class="wrap">
+<h3>The idea behind it</h3>
+<blockquote>A successful API call is not evidence that a human heard anything. Confirm with the person.</blockquote>
+<p>In plain words: a computer reporting that it played a sound does not prove you heard it. So voice-access asks you.</p>
+</div>
+</div>
+
+<div class="band">
+<div class="wrap approvals">
+<div>
+<h3 id="approvals">Spoken approvals</h3>
+<p>A voice session has no screen to click "allow" on. So <code>talk</code> reads each request aloud, including the actual command. You say yes or no, or ask "what does that do?".</p>
+<p>A very long command is cut off after about 200 characters when read aloud. The full request appears on screen and in the log.</p>
+<ul class="rules">
+<li class="yes"><strong>A short, clear yes</strong> is the only thing that counts as yes.</li>
+<li><strong>Silence</strong> means no.</li>
+<li><strong>An unclear answer</strong> means no.</li>
+</ul>
+</div>
+<figure>
+<figcaption>An example of how it can go. Claude's descriptions and explanations will vary.</figcaption>
+<ol class="exchange">
+<li><strong>talk says:</strong> "Claude wants to run a command it describes as: delete the old notes file. The actual command is: <code>del old-notes.txt</code>. Say yes to allow it, no to refuse, or ask what does that do."</li>
+<li class="you"><strong>You say:</strong> "What does that do?"</li>
+<li><strong>Claude says:</strong> "Nothing has run yet. It would delete the file called old-notes.txt. Do you want me to do that?"</li>
+<li class="you"><strong>You say:</strong> "No."</li>
+</ol>
+</figure>
+</div>
+</div>
+
+</section>
+
+<section id="for-me" aria-labelledby="for-me-h" class="band">
+<div class="wrap section-stack">
+<h2 id="for-me-h">Is it for me?</h2>
+<div class="columns">
+<div class="column">
+<h3 style="margin-bottom:0.75rem">It may suit you if</h3>
+<ul class="plain-list">
+<li>Typing or using a mouse is hard, tiring, painful or impossible for you.</li>
+<li>You use Windows and would like to talk with Claude and hear the answers.</li>
+<li>You are helping someone else get set up.</li>
+</ul>
+</div>
+<div class="column">
+<h3 style="margin-bottom:0.75rem">It may not suit you if</h3>
+<ul class="plain-list">
+<li>Your computer does not run Windows.</li>
+<li>Speaking, or hearing spoken answers, is not an option for you. <code>talk</code> is a spoken conversation.</li>
+<li>You cannot type and have nobody to help with first-time setup.</li>
+</ul>
+</div>
+</div>
+<p>So far, it has been tested by voice on one Windows computer, so you may run into problems nobody has seen yet.</p>
+</div>
+</section>
+
+<section id="need" aria-labelledby="need-h" class="band">
+<div class="wrap section-stack">
+<h2 id="need-h">What do I need?</h2>
+<ul class="tile-list">
+<li class="need-item">Windows</li>
+<li class="need-item">Python</li>
+<li class="need-item">Claude Code</li>
+<li class="need-item">A Claude account</li>
+</ul>
+<p>Python is a free programming language that <code>talk</code> runs on. Claude Code is Anthropic's program for using Claude from a terminal, which is a window where you type commands.</p>
+<p><strong>And someone who can type, if you cannot.</strong> First-time setup uses a few terminal commands, so you may need a helper for that part.</p>
+</div>
+</section>
+
+<section id="start" aria-labelledby="start-h" class="band">
+<div class="wrap section-stack">
+<h2 id="start-h">How do I get started?</h2>
+<ol class="measure plain-list" style="gap:1rem;padding-left:1.5em">
+<li>Read <a href="#access">what it can access</a>, so you know what you are agreeing to.</li>
+<li>Open the <a href="https://github.com/retrogradespace/voice-access/blob/main/talk/README.md#setup">setup instructions for talk on GitHub</a>. Everything you need to install is listed there. To add the skill, see the <a href="https://github.com/retrogradespace/voice-access#voice-access">project's main page</a>.</li>
+<li>Run the terminal commands from the instructions, or ask your helper to.</li>
+<li>Start talking. It starts with the smallest set of permissions, and you can <a href="#permissions">choose how much to allow</a>.</li>
+</ol>
+<div class="helper">
+<h3>If you are helping someone</h3>
+<p>You may only be needed for the typing. Go through <a href="#access">what it can access</a> together first, and let the person decide. Then check that it works by asking them, not by reading the screen.</p>
+</div>
+</div>
+</section>
+
+<section id="access" aria-labelledby="access-h" class="band">
+<div class="wrap access-stack">
+<h2 id="access-h">What can it access?</h2>
+<div class="access-part">
+<h3>What leaves your computer</h3>
+<p><strong>No audio leaves your computer.</strong> Claude receives the transcribed text, along with any files it reads and anything else it works with.</p>
+</div>
+<div class="access-part">
+<h3>What it can do without asking</h3>
+<p>It starts with the smallest set of permissions. Without asking you first, it can only:</p>
+<ul>
+<li>Read and search files in the working folder, which is the folder you start it from</li>
+<li>Run commands there that only read information, such as <code>git status</code></li>
+</ul>
+<p>Any allow rules you have set in your own Claude Code settings also run without asking.</p>
+<p>For anything else, it asks out loud first. That includes changing a file, reading a file outside the folder, and using the web. See <a href="#approvals">spoken approvals</a>.</p>
+<p>Asking is not the same as blocking. If you say yes, Claude can go outside the folder for that one action.</p>
+</div>
+<div class="access-part">
+<h3 id="permissions">You decide how much to allow</h3>
+<p>You can stop being asked about some things, and change your mind later, by voice. Say any of these on its own after the beep.</p>
+<ul>
+<li><strong>"Permissions"</strong> tells you what it can do now, and your options.</li>
+<li><strong>"Allow editing"</strong> lets it create and change files in the working folder without asking. It could overwrite your work.</li>
+<li><strong>"Allow reading"</strong> lets it read and search files anywhere on your computer without asking. Anything it reads is sent to Claude.</li>
+<li><strong>"Allow web"</strong> lets it search the web and open web pages without asking. A harmful page could try to trick it.</li>
+<li><strong>"Ask before editing"</strong>, <strong>"Ask before reading"</strong> or <strong>"Ask before web"</strong> goes back to asking.</li>
+</ul>
+<p>Before allowing anything, it reads you the risk and waits for a short, clear yes. Going back to asking needs no yes.</p>
+<p>Allowing both reading and web is the widest choice, because a harmful page could try to trick Claude into sending a file's contents somewhere.</p>
+<p>Your choices are saved for next time, and apply in whichever folder you start it from. Claude cannot change them for you. A helper can also <a href="https://github.com/retrogradespace/voice-access/blob/main/talk/README.md#choosing-how-much-to-allow">change them by typing</a>.</p>
+</div>
+<div class="access-part">
+<h3>What it keeps</h3>
+<p>Unless you turn this off, it keeps a full written log of each conversation on your computer.</p>
+</div>
+</div>
+</section>
+
+</main>
+
+<footer>
+<div class="wrap">
+<p>Co-authored by retrogradespace and Claude, Anthropic's AI model, working together in Claude Code. Released under the MIT license.</p>
+<ul class="link-row">
+<li><a href="https://github.com/retrogradespace/voice-access">voice-access on GitHub</a></li>
+<li><a href="mailto:info@retrograde.space">info@retrograde.space</a></li>
+</ul>
+</div>
+</footer>
+
+<script>
+(function () {
+  var root = document.documentElement;
+
+  // Light and dark view: follow the computer's setting until the person chooses.
+  var toggle = document.getElementById('view-toggle');
+  var darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  function currentView() {
+    return root.getAttribute('data-theme') || (darkQuery.matches ? 'dark' : 'light');
+  }
+  function labelToggle() {
+    toggle.textContent = currentView() === 'light' ? 'Switch to dark view' : 'Switch to light view';
+  }
+  toggle.addEventListener('click', function () {
+    var next = currentView() === 'light' ? 'dark' : 'light';
+    root.setAttribute('data-theme', next);
+    try { window.localStorage.setItem('voice-access-view', next); } catch (e) {}
+    labelToggle();
+  });
+  if (darkQuery.addEventListener) darkQuery.addEventListener('change', labelToggle);
+  labelToggle();
+  toggle.hidden = false;
+
+  // Read aloud, one block at a time, using the browser's own voices.
+  if (!('speechSynthesis' in window && 'SpeechSynthesisUtterance' in window)) return;
+  var mainButton = document.getElementById('read-main');
+  var nextButton = document.getElementById('read-next');
+  var stopButton = document.getElementById('read-stop');
+  var errorBox = document.getElementById('read-error');
+  var blocks = [], index = 0, token = 0, state = 'idle', marked = null, utterance = null;
+  document.getElementById('read-tools').hidden = false;
+  window.speechSynthesis.cancel();
+
+  function readBlocks() {
+    var found = [];
+    document.querySelectorAll('header, main, footer').forEach(function (area) {
+      area.querySelectorAll('h1, h2, h3, h4, p, li, blockquote, figcaption').forEach(function (el) {
+        if (el.parentElement.closest('li, p, blockquote, figcaption')) return;
+        var text = (el.innerText || el.textContent).replace(/\s+/g, ' ').trim();
+        if (text) found.push({ el: el, text: text });
+      });
+    });
+    return found;
+  }
+  function mark(el) {
+    if (marked) marked.classList.remove('reading');
+    marked = el;
+    if (!el) return;
+    el.classList.add('reading');
+    var box = el.getBoundingClientRect();
+    if (box.top < 0 || box.bottom > window.innerHeight) el.scrollIntoView({ block: 'center' });
+  }
+  function show(next) {
+    state = next;
+    mainButton.textContent = state === 'playing' ? 'Pause' : state === 'paused' ? 'Continue' : 'Read aloud';
+    nextButton.hidden = stopButton.hidden = state === 'idle';
+  }
+  function silence() {
+    token += 1;
+    window.speechSynthesis.cancel();
+  }
+  function finish(failed) {
+    silence();
+    mark(null);
+    var hadFocus = document.activeElement === nextButton || document.activeElement === stopButton;
+    show('idle');
+    if (hadFocus) mainButton.focus();
+    errorBox.textContent = failed ? 'Read aloud could not play. This browser may not have a voice installed.' : '';
+  }
+  function speakCurrent() {
+    token += 1;
+    var mine = token;
+    var block = blocks[index];
+    if (!block) { finish(false); return; }
+    mark(block.el);
+    window.speechSynthesis.cancel();
+    utterance = new SpeechSynthesisUtterance(block.text);
+    utterance.lang = 'en';
+    utterance.onend = function () {
+      if (mine !== token) return;
+      index += 1;
+      speakCurrent();
+    };
+    utterance.onerror = function () {
+      if (mine === token) finish(true);
+    };
+    window.speechSynthesis.speak(utterance);
+  }
+  mainButton.addEventListener('click', function () {
+    if (state === 'playing') { silence(); show('paused'); return; }
+    if (state === 'idle') { blocks = readBlocks(); index = 0; }
+    errorBox.textContent = '';
+    show('playing');
+    speakCurrent();
+  });
+  nextButton.addEventListener('click', function () {
+    index += 1;
+    show('playing');
+    speakCurrent();
+  });
+  stopButton.addEventListener('click', function () { finish(false); });
+  window.addEventListener('pagehide', silence);
+})();
+</script>
+</body>
+</html>
